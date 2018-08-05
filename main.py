@@ -58,6 +58,11 @@ def layers(vgg_layer3_out, vgg_layer4_out, vgg_layer7_out, num_classes):
     :return: The Tensor for the last layer of output
     """
     # TODO: Implement function
+    # vgg base network is not in frozen state, so to prevent gradient updates
+    vgg_layer3_out = tf.stop_gradient(vgg_layer3_out)
+    vgg_layer4_out = tf.stop_gradient(vgg_layer4_out)
+    vgg_layer7_out = tf.stop_gradient(vgg_layer7_out)
+
     # two steps to do L2 regularization
     # step 1: set the key valued parameter kernel_regularizer, this adds a node computing a l2 regularization
     # term with scaling factor of your choice, add it to tf.GraphKeys.REGULARIZATION_LOSSES
@@ -165,7 +170,7 @@ def run():
     correct_label = tf.placeholder(tf.float32, (None, None, None, num_classes))
     learning_rate = tf.placeholder(tf.float32, [])
     epochs = 50
-    batch_size = 16
+    batch_size = 5
 
     # OPTIONAL: Train and Inference on the cityscapes dataset instead of the Kitti dataset.
     # You'll need a GPU with at least 10 teraFLOPS to train on.

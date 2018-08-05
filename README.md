@@ -2,7 +2,7 @@
 ### Introduction
 In this project, you'll label the pixels of a road in images using a Fully Convolutional Network (FCN).
 
-This project implemented FCN-8S-VGG16 proposed in the paper [Fully Convolutional Networks for Semantic Segmentation](https://arxiv.org/abs/1411.4038v2)
+This project implemented FCN-8s-VGG16 proposed in the paper [Fully Convolutional Networks for Semantic Segmentation](https://arxiv.org/abs/1411.4038v2) using Tensorflow.
 
 ### Setup
 ##### GPU
