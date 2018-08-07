@@ -63,32 +63,39 @@ def layers(vgg_layer3_out, vgg_layer4_out, vgg_layer7_out, num_classes):
     vgg_layer4_out = tf.stop_gradient(vgg_layer4_out)
     vgg_layer7_out = tf.stop_gradient(vgg_layer7_out)
 
+    # initializer = tf.truncated_normal_initializer(stddev=0.01)
     # two steps to do L2 regularization
     # step 1: set the key valued parameter kernel_regularizer, this adds a node computing a l2 regularization
     # term with scaling factor of your choice, add it to tf.GraphKeys.REGULARIZATION_LOSSES
     # step 2 is in loss function definition
-    regularizer = tf.contrib.layers.l2_regularizer(scale=0.001)
+    # regularizer = tf.contrib.layers.l2_regularizer(scale=0.001)
     classifier_layer7 = tf.layers.conv2d(vgg_layer7_out, num_classes, 1, padding='same',
-                                         kernel_regularizer=regularizer)
+                                         kernel_regularizer=tf.contrib.layers.l2_regularizer(scale=0.001),
+                                         kernel_initializer=tf.truncated_normal_initializer(stddev=0.01))
 
-    output_layer7 = tf.layers.conv2d_transpose(classifier_layer7, num_classes, 4, 2, padding='same',
-                                               kernel_regularizer=regularizer)
+    output_layer7 = tf.layers.conv2d_transpose(classifier_layer7, num_classes, 4, strides=(2, 2), padding='same',
+                                               kernel_regularizer=tf.contrib.layers.l2_regularizer(scale=0.001),
+                                               kernel_initializer=tf.truncated_normal_initializer(stddev=0.01))
     classifier_layer4 = tf.layers.conv2d(vgg_layer4_out, num_classes, 1, padding='same',
-                                         kernel_regularizer=regularizer)
+                                         kernel_regularizer=tf.contrib.layers.l2_regularizer(scale=0.001),
+                                         kernel_initializer=tf.truncated_normal_initializer(stddev=0.01))
     # do we need to set the shape or not?
     # output_layer7.set_shape([None] + classifier_layer4.shape[1:].as_list())
 
     input = tf.add(output_layer7, classifier_layer4)
 
     classifier_layer3 = tf.layers.conv2d(vgg_layer3_out, num_classes, 1, padding='same',
-                                         kernel_regularizer=regularizer)
-    input = tf.layers.conv2d_transpose(input, num_classes, 4, 2, padding='same',
-                                       kernel_regularizer=regularizer)
+                                         kernel_regularizer=tf.contrib.layers.l2_regularizer(scale=0.001),
+                                         kernel_initializer=tf.truncated_normal_initializer(stddev=0.01))
+    input = tf.layers.conv2d_transpose(input, num_classes, 4, strides=(2, 2), padding='same',
+                                       kernel_regularizer=tf.contrib.layers.l2_regularizer(scale=0.001),
+                                       kernel_initializer=tf.truncated_normal_initializer(stddev=0.01))
     # input.set_shape([None] + classifier_layer3.shape[1:].as_list())
     input = tf.add(input, classifier_layer3)
 
-    input = tf.layers.conv2d_transpose(input, num_classes, 16, 8, padding='same',
-                                       kernel_regularizer=regularizer)
+    input = tf.layers.conv2d_transpose(input, num_classes, 16, strides=(8, 8), padding='same',
+                                       kernel_regularizer=tf.contrib.layers.l2_regularizer(scale=0.001),
+                                       kernel_initializer=tf.truncated_normal_initializer(stddev=0.01))
     # no reshape of the final output because we do not have image size here
     return input
 
@@ -107,14 +114,17 @@ def optimize(nn_last_layer, correct_label, learning_rate, num_classes):
     """
     # TODO: Implement function
     logits = tf.reshape(nn_last_layer, (-1, num_classes))
+    labels = tf.reshape(correct_label, (-1, num_classes))
 
     # step 2 of doing L2 regularization: collect all L2 reg terms and sum them up, add the sum to the total loss
-    cross_entropy_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=logits, labels=correct_label))
-    reg_losses = tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES)
-    cross_entropy_loss += sum(reg_losses)
+    # but with scale=0.001 the performance is bad so I skipped it for now
+    cross_entropy_loss = tf.reduce_mean(
+        tf.nn.softmax_cross_entropy_with_logits(logits=logits, labels=labels))
+    # reg_losses = tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES)  # or tf.losses.get_regularization_loss()
+    # cross_entropy_loss += tf.reduce_sum(reg_losses)
 
     optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate)
-    training_operation = optimizer.minimize(cross_entropy_loss)
+    training_operation = optimizer.minimize(cross_entropy_loss, global_step=tf.train.get_global_step())
 
     return logits, training_operation, cross_entropy_loss
 
@@ -167,16 +177,16 @@ def run():
     # Download pretrained vgg model
     helper.maybe_download_pretrained_vgg(data_dir)
 
-    correct_label = tf.placeholder(tf.float32, (None, None, None, num_classes))
-    learning_rate = tf.placeholder(tf.float32, [])
-    epochs = 50
-    batch_size = 5
+    epochs = 25
+    batch_size = 10
 
     # OPTIONAL: Train and Inference on the cityscapes dataset instead of the Kitti dataset.
     # You'll need a GPU with at least 10 teraFLOPS to train on.
     #  https://www.cityscapes-dataset.com/
 
     with tf.Session() as sess:
+        correct_label = tf.placeholder(tf.float32, (None, image_shape[0], image_shape[1], num_classes))
+        learning_rate = tf.placeholder(tf.float32, [])
         # Path to vgg model
         vgg_path = os.path.join(data_dir, 'vgg')
         # Create function to get batches
@@ -198,13 +208,12 @@ def run():
         train_nn(sess, epochs, batch_size, get_batches_fn, train_op, cross_entropy_loss, image_input,
                  correct_label, keep_prob, learning_rate)
 
-        # TODO: Save inference data using helper.save_inference_samples
-        helper.save_inference_samples(runs_dir, data_dir, sess, image_shape, logits, keep_prob, image_input)
-        if not os.path.exists('model'):
-          os.mkdir('model')
-
         save_path = saver.save(sess, './model/model.ckpt')
         print("Model saved in file: {}".format(save_path))
+        # TODO: Save inference data using helper.save_inference_samples
+        helper.save_inference_samples(runs_dir, data_dir, sess, image_shape, logits, keep_prob, image_input)
+
+
         tf.train.write_graph(sess.graph.as_graph_def(), './model', 'saved_Graph.pb', as_text=False)
         # OPTIONAL: Apply the trained model to a video
 
