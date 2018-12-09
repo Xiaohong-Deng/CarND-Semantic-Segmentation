@@ -213,7 +213,6 @@ def run():
         # TODO: Save inference data using helper.save_inference_samples
         helper.save_inference_samples(runs_dir, data_dir, sess, image_shape, logits, keep_prob, image_input)
 
-
         tf.train.write_graph(sess.graph.as_graph_def(), './model', 'saved_Graph.pb', as_text=False)
         # OPTIONAL: Apply the trained model to a video
 
